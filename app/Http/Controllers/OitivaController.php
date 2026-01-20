@@ -122,9 +122,9 @@ class OitivaController extends Controller
         if ($oitiva->caminho_arquivo_video) {
             // Gera uma URL válida por 60 minutos
             // O Storage::disk('s3') usa as credenciais para assinar o link
-            $urlVideo = Storage::disk('s3')->temporaryUrl(
+            $urlVideo = \App\Helpers\StorageHelper::getPublicUrl(
                 $oitiva->caminho_arquivo_video,
-                now()->addMinutes(60)
+                60
             );
         }
 
@@ -154,10 +154,10 @@ class OitivaController extends Controller
                     return response()->json(['error' => "Tipo de arquivo inválido: " . $file->getMimeType()], 422);
                 }
             }
-            
+
             $oitiva = Oitiva::findOrFail($id);
             $isComplete = $request->boolean('is_recording_complete');
-            
+
             // Caminho temporário (igual ao anterior)
             $tempDir = storage_path('app/temp_chunks');
             $tempFileName = $oitiva->uuid . '.webm';
@@ -170,7 +170,7 @@ class OitivaController extends Controller
             // 2. Lógica Condicional: Só tenta salvar se enviou arquivo
             if ($request->hasFile('video_part')) {
                 $fileChunk = $request->file('video_part');
-                
+
                 // Verifica se o arquivo é válido antes de tentar ler
                 if ($fileChunk->isValid()) {
                     $content = file_get_contents($fileChunk->getRealPath());
@@ -188,7 +188,7 @@ class OitivaController extends Controller
             // =================================================================
             // 4. FINALIZAÇÃO (Disparo do Job)
             // =================================================================
-            
+
             // Verifica se o arquivo base existe antes de disparar o Job
             if (!File::exists($tempFilePath)) {
                 return response()->json(['error' => 'Arquivo de vídeo base não encontrado no servidor.'], 404);

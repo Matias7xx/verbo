@@ -28,7 +28,7 @@ class PublicOitivaController extends Controller
 
         return Inertia::render('Oitivas/PublicRecorder', [
             'oitiva' => $oitiva,
-            'upload_url' => $uploadUrl 
+            'upload_url' => $uploadUrl
         ]);
     }
 
@@ -38,7 +38,7 @@ class PublicOitivaController extends Controller
         // Instancia o controller principal para reutilizar a lógica robusta de chunks
         // que já criamos (com tratamento de php.ini, temp files, S3, Jobs)
         $mainController = new OitivaController(new \App\Services\OitivaService());
-        
+
         return $mainController->uploadVideoChunk($request, $oitiva->id);
     }
 
@@ -69,10 +69,10 @@ class PublicOitivaController extends Controller
         ]);
 
         // 4. Gerar URL Temporária do Vídeo (Válida por 1 hora)
-        $urlVideo = Storage::disk('s3')->temporaryUrl(
-            $oitiva->caminho_arquivo_video,
-            now()->addMinutes(1)
-        );
+        $urlVideo = \App\Helpers\StorageHelper::getPublicUrl(
+                $oitiva->caminho_arquivo_video,
+                60
+            );
 
         // 5. Renderizar a View
         return Inertia::render('Oitivas/PublicPlayer', [
