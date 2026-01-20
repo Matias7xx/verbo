@@ -1,0 +1,45 @@
+/* Garante fundo preto no menubar SEM border-radius */
+.p-menubar {
+    background: #000000 !important;
+    border-color: transparent !important;
+    border-radius: 0 !important;
+}
+
+/* Garante texto branco nos itens do menu */
+.p-menubar .p-menubar-item-content .p-menubar-item-link {
+    color: #ffffff !important;
+    border-radius: 0.375rem;
+}
+
+/* Ícone do dropdown (setinha) - BRANCO */
+.p-menubar .p-menubar-item-content .p-menubar-item-link .p-menubar-submenu-icon,
+.p-menubar .p-menubar-item-content .p-menubar-item-link .p-icon {
+    color: #ffffff !important;
+}
+
+/* Garante hover dourado COM border-radius */
+.p-menubar .p-menubar-item-content .p-menubar-item-link:hover {
+    background: #c1a85a !important;
+    border-radius: 0.375rem;
+}
+
+/* Ícone do dropdown no hover - BRANCO */
+.p-menubar .p-menubar-item-content .p-menubar-item-link:hover .p-menubar-submenu-icon,
+.p-menubar .p-menubar-item-content .p-menubar-item-link:hover .p-icon {
+    color: #ffffff !important;
+}
+
+/* Item ativo dourado COM border-radius */
+.p-menubar .p-menubar-item.p-focus > .p-menubar-item-content .p-menubar-item-link,
+.p-menubar .p-menubar-item.p-menubar-item-active > .p-menubar-item-content .p-menubar-item-link {
+    background: #c1a85a !important;
+    border-radius: 0.375rem;
+}
+
+/* Ícone do dropdown no item ativo - BRANCO */
+.p-menubar .p-menubar-item.p-focus > .p-menubar-item-content .p-menubar-item-link .p-menubar-submenu-icon,
+.p-menubar .p-menubar-item.p-focus > .p-menubar-item-content .p-menubar-item-link .p-icon,
+.p-menubar .p-menubar-item.p-menubar-item-active > .p-menubar-item-content .p-menubar-item-link .p-menubar-submenu-icon,
+.p-menubar .p-menubar-item.p-menubar-item-active > .p-menubar-item-content .p-menubar-item-link .p-icon {
+    color: #ffffff !important;
+}
