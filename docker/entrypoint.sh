@@ -22,6 +22,12 @@ if grep -q "APP_KEY=" .env && [ -z "$(grep "APP_KEY=" .env | cut -d '=' -f 2)" ]
     php artisan key:generate
 fi
 
+# Configurar npm e permissões ANTES de instalar
+mkdir -p /home/www-data/.npm
+chown -R www-data:www-data /home/www-data
+export npm_config_cache=/home/www-data/.npm
+rm -rf /root/.npm 2>/dev/null || true
+
 # Verifica se a pasta build não existe OU se o ambiente não é produção (para forçar recompilação em dev)
 if [ ! -d "public/build" ] || [ "$APP_ENV" != "production" ]; then
     echo "📦 Detectado falta de assets ou ambiente dev. Compilando Frontend..."
@@ -37,6 +43,10 @@ if [ ! -d "public/build" ] || [ "$APP_ENV" != "production" ]; then
 else
     echo "✅ Assets de frontend já compilados."
 fi
+
+# Corrigir permissões após npm install/build
+chown -R www-data:www-data /var/www/html/node_modules 2>/dev/null || true
+rm -rf /var/www/html/node_modules/.vite* 2>/dev/null || true
 
 # Ajusta as permissões antes de iniciar os serviços
 echo "Ajustando permissões..."
@@ -62,6 +72,12 @@ php artisan config:clear
 php artisan route:clear
 php artisan view:clear
 php artisan cache:clear
+
+# Controlar Vite baseado no ambiente
+if [ "$APP_ENV" != "production" ]; then
+    echo "🔥 Dev - Habilitando Vite..."
+    sed -i 's/autostart=false/autostart=true/g' /etc/supervisor/conf.d/supervisord.conf
+fi
 
 # Inicia o Supervisor (que iniciará Apache e Workers)
 echo "✅ Iniciando Supervisor..."
