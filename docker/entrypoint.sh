@@ -25,13 +25,13 @@ fi
 # Verifica se a pasta build não existe OU se o ambiente não é produção (para forçar recompilação em dev)
 if [ ! -d "public/build" ] || [ "$APP_ENV" != "production" ]; then
     echo "📦 Detectado falta de assets ou ambiente dev. Compilando Frontend..."
-    
-    # Instala dependências (caso o volume tenha ocultado a node_modules da imagem)
-    if [ ! -d "node_modules" ]; then
+
+    # Instala dependências Node (verifica se vite existe)
+    if [ ! -f "node_modules/.bin/vite" ]; then
         echo "📥 Instalando dependências Node..."
         npm install
     fi
-    
+
     echo "🔨 Executando npm run build..."
     npm run build
 else
@@ -41,6 +41,18 @@ fi
 # Ajusta as permissões antes de iniciar os serviços
 echo "Ajustando permissões..."
 chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+
+# Cria o link simbólico do storage
+echo "🔗 Criando link simbólico do storage..."
+php artisan storage:link --force
+
+echo "⏳ Aguardando PostgreSQL ficar disponível..."
+
+until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME"; do
+  sleep 2
+done
+
+echo "✅ PostgreSQL disponível."
 
 # Roda as migrações (Idealmente em prod você controla isso manualmente ou via pipeline, mas aqui facilita)
 echo "🗄️ Executando migrações..."

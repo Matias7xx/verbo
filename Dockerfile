@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     cron \
     supervisor \
     ffmpeg \
+    postgresql-client \
     libpng-dev \
     libjpeg-dev \
     libpq-dev \
@@ -22,6 +23,7 @@ RUN apt-get update && apt-get install -y \
     nodejs \
     npm \
     dos2unix \
+    git \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install gd pdo pdo_pgsql zip
 
