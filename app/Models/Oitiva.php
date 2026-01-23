@@ -16,7 +16,8 @@ class Oitiva extends Model
         'uuid', 'user_id', 'unidade_id', 'declarante_id', 'representante_id',
         'numero_inquerito', 'nome_delegado_responsavel', 'tipo_oitiva',
         'caminho_arquivo_video', 'hash_arquivo_video', 'assinatura_biometrica',
-        'data_inicio_gravacao', 'data_fim_gravacao', 'observacoes'
+        'data_inicio_gravacao', 'data_fim_gravacao', 'observacoes', 'status_download',
+        'download_zip_path',
     ];
 
     protected $casts = [

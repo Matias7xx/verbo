@@ -9,6 +9,7 @@ use Inertia\Inertia;
 use Illuminate\Support\Facades\URL;
 use App\Http\Controllers\OitivaController;
 use Illuminate\Support\Facades\Storage;
+use App\Jobs\ProcessVideoDownloadZip;
 
 class PublicOitivaController extends Controller
 {
@@ -84,4 +85,76 @@ class PublicOitivaController extends Controller
             ]
         ]);
     }
+
+    public function iniciarDownload(Request $request, Oitiva $oitiva)
+{
+    // Verifica se o vídeo existe
+    if (empty($oitiva->caminho_arquivo_video)) {
+        return response()->json([
+            'error' => 'Vídeo não disponível para download'
+        ], 404);
+    }
+
+    // Verifica se já está processando
+    if ($oitiva->status_download === 'processing') {
+        return response()->json([
+            'message' => 'Download já está sendo processado',
+            'status' => 'processing'
+        ]);
+    }
+
+    // Verifica se já foi processado
+    if ($oitiva->status_download === 'completed' && $oitiva->download_zip_path) {
+        // Verifica se o arquivo ainda existe
+        if (Storage::exists($oitiva->download_zip_path)) {
+            return response()->json([
+                'message' => 'Download já está pronto',
+                'status' => 'completed'
+            ]);
+        }
+    }
+
+    // Dispara o Job para processar
+    ProcessVideoDownloadZip::dispatch($oitiva->id);
+
+    return response()->json([
+        'message' => 'Processamento iniciado',
+        'status' => 'processing'
+    ]);
+}
+
+/**
+ * Verifica o status do processamento do download
+ */
+public function statusDownload(Oitiva $oitiva)
+{
+    return response()->json([
+        'status' => $oitiva->status_download ?? 'pending',
+        'ready' => $oitiva->status_download === 'completed'
+    ]);
+}
+
+/**
+ * Faz o download do arquivo ZIP
+ */
+public function downloadZip(Oitiva $oitiva)
+{
+    // Verifica se o processamento foi concluído
+    if ($oitiva->status_download !== 'completed' || empty($oitiva->download_zip_path)) {
+        return response()->json([
+            'error' => 'Download não está pronto ainda'
+        ], 404);
+    }
+
+    // Verifica se o arquivo existe
+    $zipPath = storage_path('app/' . $oitiva->download_zip_path);
+    if (!file_exists($zipPath)) {
+        return response()->json([
+            'error' => 'Arquivo não encontrado'
+        ], 404);
+    }
+
+    // Retorna o arquivo para download
+    return response()->download($zipPath, $oitiva->uuid . '.zip');
+}
 }

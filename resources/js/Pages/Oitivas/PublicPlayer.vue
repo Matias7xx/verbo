@@ -4,6 +4,8 @@ import { Head } from '@inertiajs/vue3';
 import Tag from 'primevue/tag';
 import Divider from 'primevue/divider';
 import Button from 'primevue/button';
+import axios from 'axios';
+import { router } from '@inertiajs/vue3'
 
 // Props vindas do Controller
 const props = defineProps({
@@ -24,29 +26,88 @@ const toggleFullscreen = async () => {
     if (!playerContainer.value) return;
 
     if (!document.fullscreenElement) {
-        // Entrar em tela cheia no CONTAINER (inclui vídeo e marca d'água)
         try {
             await playerContainer.value.requestFullscreen();
         } catch (err) {
             console.error(`Erro ao ativar tela cheia: ${err.message}`);
         }
     } else {
-        // Sair da tela cheia
         if (document.exitFullscreen) {
             document.exitFullscreen();
         }
     }
 };
 
-// Monitorar mudanças para atualizar o estado e garantir segurança
 const updateFullscreenState = () => {
     isFullscreen.value = !!document.fullscreenElement;
-
-    // SEGURANÇA: Se o usuário conseguiu colocar APENAS o vídeo em tela cheia
-    // (burlando o botão), forçamos a saída para garantir a marca d'água.
     if (document.fullscreenElement && document.fullscreenElement.tagName === 'VIDEO') {
         document.exitFullscreen();
     }
+};
+
+// Estados do download
+const downloadStatus = ref('pending');
+const isDownloading = ref(false);
+const pollingInterval = ref(null);
+
+const iniciarDownload = async () => {
+    try {
+        isDownloading.value = true;
+        downloadStatus.value = 'processing';
+
+        const response = await axios.post(
+            route('public.oitiva.iniciar-download', {
+                oitiva: props.oitiva.id
+            })
+        );
+
+        if (response.data.status === 'processing') {
+            startPolling();
+        } else if (response.data.status === 'completed') {
+            downloadStatus.value = 'completed';
+            isDownloading.value = false;
+        }
+    } catch (error) {
+        console.error('Erro ao iniciar download:', error);
+        downloadStatus.value = 'failed';
+        isDownloading.value = false;
+    }
+};
+
+const startPolling = () => {
+    if (pollingInterval.value) {
+        clearInterval(pollingInterval.value);
+    }
+
+    pollingInterval.value = setInterval(async () => {
+        try {
+            const response = await axios.get(
+                route('public.oitiva.status-download', {
+                    oitiva: props.oitiva.id
+                })
+            );
+
+            downloadStatus.value = response.data.status;
+
+            if (response.data.ready) {
+                clearInterval(pollingInterval.value);
+                isDownloading.value = false;
+                downloadStatus.value = 'completed';
+            }
+        } catch (error) {
+            console.error('Erro ao verificar status:', error);
+            clearInterval(pollingInterval.value);
+            isDownloading.value = false;
+            downloadStatus.value = 'failed';
+        }
+    }, 3000);
+};
+
+const baixarZip = () => {
+    const downloadUrl = route('public.oitiva.download-zip', {
+        oitiva: props.oitiva.id
+    });
+    window.open(downloadUrl, '_blank');
 };
 
 onMounted(() => {
@@ -54,9 +115,11 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    if (pollingInterval.value) {
+        clearInterval(pollingInterval.value);
+    }
     document.removeEventListener('fullscreenchange', updateFullscreenState);
 });
-// ------------------------------------
 </script>
 
 <template>
@@ -79,14 +142,12 @@ onUnmounted(() => {
             </div>
         </div>
 
-        <div class="w-full max-w-5xl mb-6">
-
+        <div class="w-full max-w-5xl mb-8">
             <div
                 ref="playerContainer"
                 class="bg-black shadow-lg overflow-hidden border border-gray-800 relative group flex flex-col justify-center"
                 style="border-radius: 8px;"
             >
-
                 <video
                     controls
                     controlsList="nodownload nofullscreen noremoteplayback"
@@ -103,14 +164,7 @@ onUnmounted(() => {
                     class="absolute top-0 left-0 w-full z-20 pointer-events-none overflow-hidden select-none flex flex-wrap content-start justify-center gap-12 p-8"
                     :style="{ height: isFullscreen ? 'calc(100% - 90px)' : 'calc(100% - 80px)' }"
                 >
-                    <div
-                        v-for="i in 40"
-                        :key="i"
-                        class="transform -rotate-12 font-mono font-bold text-lg whitespace-nowrap"
-                        :style="{
-                            color: 'rgba(0, 0, 0, 0.15)'
-                        }"
-                    >
+                    <div v-for="i in 40" :key="i" class="transform -rotate-12 font-mono font-bold text-lg whitespace-nowrap" style="color: rgba(0, 0, 0, 0.15)">
                         {{ viewer_info.matricula }} • {{ viewer_info.nome }}
                     </div>
                 </div>
@@ -120,18 +174,11 @@ onUnmounted(() => {
                         @click="toggleFullscreen"
                         rounded
                         :icon="isFullscreen ? 'pi pi-window-minimize' : 'pi pi-window-maximize'"
-                        :aria-label="isFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia'"
                         size="large"
                         class="fullscreen-btn"
-                        :pt="{
-                            root: {
-                                style: 'background-color: #ffffff !important; color: #1f2937 !important; border: 2px solid #111827; width: 3.5rem; height: 3.5rem; box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);'
-                            }
-                        }"
+                        :pt="{ root: { style: 'background-color: #ffffff !important; color: #1f2937 !important; border: 2px solid #111827; width: 3.5rem; height: 3.5rem; box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);' } }"
                     />
-
                 </div>
-
             </div>
 
             <div class="flex items-center justify-center gap-2 text-xs text-gray-500 mt-3" v-if="!isFullscreen">
@@ -142,62 +189,60 @@ onUnmounted(() => {
             </div>
         </div>
 
-        <div class="w-full max-w-5xl grid grid-cols-1 md:grid-cols-5 gap-4 items-start">
-            <div class="md:col-span-2 bg-white p-6 shadow-sm border border-gray-200 flex flex-col" style="border-radius: 8px; min-height: 100%;">
-                <h2 class="text-lg font-bold mb-5 flex items-center gap-2 text-gray-800">
-                    <i class="pi pi-file-edit text-black text-xl"></i>
-                    Dados do Procedimento
-                </h2>
+        <div class="w-full max-w-5xl grid grid-cols-1 md:grid-cols-5 gap-6 items-start">
 
-                <div class="space-y-5 flex-1">
-                    <div>
-                        <label class="text-xs text-gray-600 uppercase font-semibold block mb-1">Número do Inquérito</label>
-                        <p class="font-mono text-base text-gray-900 font-semibold">{{ oitiva.numero_inquerito }}</p>
-                    </div>
-                    <div>
-                        <label class="text-xs text-gray-600 uppercase font-semibold block mb-1">Tipo de Oitiva</label>
-                        <p class="text-gray-900 capitalize">{{ oitiva.tipo_oitiva }}</p>
-                    </div>
-                    <div>
-                        <label class="text-xs text-gray-600 uppercase font-semibold block mb-1">Delegado Responsável</label>
-                        <p class="text-gray-900">{{ oitiva.nome_delegado_responsavel }}</p>
-                    </div>
-                    <div>
-                        <label class="text-xs text-gray-600 uppercase font-semibold block mb-1">Data da Gravação</label>
-                        <p class="text-gray-900">{{ new Date(oitiva.created_at).toLocaleDateString('pt-BR') }}</p>
-                    </div>
-                </div>
+            <div class="md:col-span-2 space-y-6">
+                <div class="bg-white p-6 shadow-sm border border-gray-200" style="border-radius: 8px;">
+                    <h2 class="text-lg font-bold mb-5 flex items-center gap-2 text-gray-800">
+                        <i class="pi pi-file-edit text-black text-xl"></i>
+                        Dados do Procedimento
+                    </h2>
 
-                <div class="h-px bg-gray-200 my-5"></div>
+                    <div class="space-y-5">
+                        <div>
+                            <label class="text-xs text-gray-600 uppercase font-semibold block mb-1">Número do Inquérito</label>
+                            <p class="font-mono text-base text-gray-900 font-semibold">{{ oitiva.numero_inquerito }}</p>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-600 uppercase font-semibold block mb-1">Tipo de Oitiva</label>
+                            <p class="text-gray-900 capitalize">{{ oitiva.tipo_oitiva }}</p>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-600 uppercase font-semibold block mb-1">Delegado Responsável</label>
+                            <p class="text-gray-900">{{ oitiva.nome_delegado_responsavel }}</p>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-600 uppercase font-semibold block mb-1">Data da Gravação</label>
+                            <p class="text-gray-900">{{ new Date(oitiva.created_at).toLocaleDateString('pt-BR') }}</p>
+                        </div>
 
-                <div>
-                    <label class="text-xs text-gray-600 uppercase font-semibold block mb-2">Declarante</label>
-                    <p class="text-xl font-bold text-gray-800">{{ oitiva.declarante.nome_completo }}</p>
-                    <p class="text-sm text-gray-600 mt-1" v-if="oitiva.declarante.cpf">CPF: {{ oitiva.declarante.cpf }}</p>
+                        <div class="h-px bg-gray-200 my-5"></div>
+
+                        <div>
+                            <label class="text-xs text-gray-600 uppercase font-semibold block mb-2">Declarante</label>
+                            <p class="text-xl font-bold text-gray-800">{{ oitiva.declarante.nome_completo }}</p>
+                            <p class="text-sm text-gray-600 mt-1" v-if="oitiva.declarante.cpf">CPF: {{ oitiva.declarante.cpf }}</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="md:col-span-3 bg-white p-6 shadow-sm border border-gray-200 flex flex-col" style="border-radius: 8px;">
-                <div class="flex-1">
+            <div class="md:col-span-3 space-y-6">
+
+                <div class="bg-white p-6 shadow-sm border border-gray-200" style="border-radius: 8px;">
                     <h3 class="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
                         <i class="pi pi-shield text-black text-xl"></i>
                         Autenticidade & Segurança
                     </h3>
 
                     <div class="mb-4">
-                        <Tag
-                            severity="success"
-                            value="Integridade Verificada"
-                            icon="pi pi-check-circle"
-                            class="mb-3"
-                            style="font-size: 0.875rem; padding: 0.5rem 1rem;"
-                        />
+                        <Tag severity="success" value="Integridade Verificada" icon="pi pi-check-circle" class="mb-3" style="font-size: 0.875rem; padding: 0.5rem 1rem;" />
                         <p class="text-sm text-gray-600 leading-relaxed">
-                            Este vídeo possui assinatura digital e hash de integridade armazenado em banco de dados auditável. A autenticidade pode ser verificada a qualquer momento.
+                            Este vídeo possui assinatura digital e hash de integridade armazenado em banco de dados auditável.
                         </p>
                     </div>
 
-                    <div class="bg-gradient-to-br from-gray-100 to-gray-200 p-4 border border-gray-200 overflow-hidden shadow-inner" style="border-radius: 8px;">
+                    <div class="bg-gradient-to-br from-gray-100 to-gray-200 p-4 border border-gray-200 shadow-inner" style="border-radius: 8px;">
                         <div class="flex items-center gap-2 mb-2">
                             <i class="pi pi-lock text-green-600"></i>
                             <label class="text-xs text-green-700 font-bold uppercase">Hash SHA-256 (Registro)</label>
@@ -210,23 +255,53 @@ onUnmounted(() => {
                     </div>
                 </div>
 
-                <div class="mt-4 p-4 bg-gradient-to-br from-gray-100 to-gray-200 border border-gray-200" style="border-radius: 8px;">
+                <div class="bg-white p-6 shadow-sm border border-gray-200" style="border-radius: 8px;">
+                    <h3 class="text-lg font-bold mb-4 flex items-center gap-2 text-gray-800">
+                        <i class="pi pi-download text-black text-xl"></i>
+                        Download do Vídeo
+                    </h3>
+
+                    <div class="space-y-4">
+                        <div v-if="downloadStatus === 'pending'" class="text-center">
+                            <p class="text-sm text-gray-600 mb-4 text-left">
+                            Clique no botão abaixo para preparar o vídeo para download.
+                            O vídeo será dividido em partes e compactado.
+                            </p>
+                            <Button @click="iniciarDownload" :disabled="isDownloading" icon="pi pi-download" label="Preparar Download" class="w-full" :pt="{ root: { style: 'background-color: #000000 !important; border-color: #000000 !important;' } }" />
+                        </div>
+
+                        <div v-if="downloadStatus === 'processing'" class="text-center py-4">
+                            <i class="pi pi-spin pi-spinner text-4xl text-black mb-3"></i>
+                            <p class="text-gray-700 font-semibold">Compactando vídeo, aguarde...</p>
+                        </div>
+
+                        <div v-if="downloadStatus === 'completed'" class="text-center">
+                            <Button @click="baixarZip" icon="pi pi-download" label="Baixar Vídeo (ZIP)" class="w-full" severity="success" />
+                            <p class="text-xs text-gray-500 mt-3 text-left">
+                                O arquivo ZIP contém o vídeo dividido em partes de até 15MB
+                            e um arquivo com os hashes SHA-256 para verificação de integridade.
+                            </p>
+                        </div>
+
+                        <div v-if="downloadStatus === 'failed'" class="text-center">
+                            <i class="pi pi-times-circle text-4xl text-red-600 mb-3"></i>
+                            <Button @click="iniciarDownload" icon="pi pi-refresh" label="Tentar Novamente" class="w-full" severity="danger" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-gradient-to-br from-gray-100 to-gray-200 border border-gray-200" style="border-radius: 8px;">
                     <div class="flex items-start gap-3">
                         <i class="pi pi-info-circle text-black text-lg mt-0.5"></i>
                         <div class="flex-1">
-                            <p class="text-sm text-blue-800 font-semibold mb-2">Acesso Monitorado</p>
-                            <p class="text-xs text-blue-700 leading-relaxed mb-2">
-                                Você está acessando este conteúdo sob a matrícula:
-                            </p>
-                            <div class="inline-block bg-white px-3 py-1.5 rounded border border-blue-300 shadow-sm">
-                                <span class="font-mono font-bold text-blue-900 text-sm">{{ viewer_info.matricula }}</span>
-                            </div>
-                            <p class="text-xs text-blue-700 mt-2">
-                                O acesso está sendo registrado para fins de auditoria.
+                            <p class="text-sm text-blue-800 font-semibold mb-1">Acesso Monitorado</p>
+                            <p class="text-xs text-blue-700 leading-relaxed">
+                                Este acesso está sendo registrado sob a matrícula <span class="font-bold text-lg">{{ viewer_info.matricula }}</span> para fins de auditoria.
                             </p>
                         </div>
                     </div>
                 </div>
+
             </div>
         </div>
     </div>

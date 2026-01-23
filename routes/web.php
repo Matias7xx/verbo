@@ -27,11 +27,21 @@ Route::get('/sala-gravacao/{oitiva}', [PublicOitivaController::class, 'sala'])
 Route::post('/sala-gravacao/{oitiva}/upload', [PublicOitivaController::class, 'upload'])
     ->name('public.oitiva.upload')
     ->middleware('signed');
-    
+
 // Rota futura para assistir (pode ser protegida ou assinada também)
 Route::get('/assistir/{oitiva}', [PublicOitivaController::class, 'assistir'])
     ->name('public.oitiva.assistir')
     ->middleware('signed');
+
+    // Rotas de Download
+Route::post('/assistir/{oitiva}/iniciar-download', [PublicOitivaController::class, 'iniciarDownload'])
+    ->name('public.oitiva.iniciar-download');
+
+Route::get('/assistir/{oitiva}/status-download', [PublicOitivaController::class, 'statusDownload'])
+    ->name('public.oitiva.status-download');
+
+Route::get('/assistir/{oitiva}/download-zip', [PublicOitivaController::class, 'downloadZip'])
+    ->name('public.oitiva.download-zip');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', function () {
@@ -39,10 +49,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('dashboard');
 
     Route::post('/oitivas/{oitiva}/upload', [OitivaController::class, 'uploadVideoChunk'])->name('oitivas.upload');
-    
+
     // Rotas padrão (Create, Store, Show, Index)
     Route::resource('oitivas', OitivaController::class);
-    
+
 });
 
 Route::middleware('auth')->group(function () {
