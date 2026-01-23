@@ -27,8 +27,19 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email' => ['required', 'string', 'email'],
+            'matricula' => ['required', 'string'],
             'password' => ['required', 'string'],
+        ];
+    }
+
+    /**
+     * Mensagens para erros de validação.
+     */
+    public function messages(): array
+    {
+        return [
+            'matricula.required' => 'A matrícula é obrigatória.',
+            'password.required' => 'A senha é obrigatória.',
         ];
     }
 
@@ -41,11 +52,11 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
+        if (! Auth::attempt($this->only('matricula', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
-                'email' => trans('auth.failed'),
+                'matricula' => 'Matrícula ou senha incorretos.',
             ]);
         }
 
@@ -68,10 +79,7 @@ class LoginRequest extends FormRequest
         $seconds = RateLimiter::availableIn($this->throttleKey());
 
         throw ValidationException::withMessages([
-            'email' => trans('auth.throttle', [
-                'seconds' => $seconds,
-                'minutes' => ceil($seconds / 60),
-            ]),
+            'matricula' => 'Muitas tentativas de login. Tente novamente em ' . ceil($seconds / 60) . ' minuto(s).',
         ]);
     }
 
@@ -80,6 +88,7 @@ class LoginRequest extends FormRequest
      */
     public function throttleKey(): string
     {
-        return Str::transliterate(Str::lower($this->string('email')).'|'.$this->ip());
+        // usa matricula para rate limiting
+        return Str::transliterate(Str::lower($this->string('matricula')).'|'.$this->ip());
     }
 }
