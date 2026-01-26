@@ -9,11 +9,18 @@ import Button from 'primevue/button';
 import Panel from 'primevue/panel';
 import Tag from 'primevue/tag';
 import ProgressBar from 'primevue/progressbar';
+import Toast from 'primevue/toast';
+import ConfirmDialog from 'primevue/confirmdialog';
+import { useToast } from 'primevue/usetoast';
+import { useConfirm } from 'primevue/useconfirm';
 
 const props = defineProps({
     oitiva: Object,
     upload_url: String // <--- Recebemos a URL assinada aqui
 });
+
+const toast = useToast();
+const confirm = useConfirm();
 
 // --- ESTADOS DO GRAVADOR ---
 const videoCanvas = ref(null); // Ref para o elemento <canvas>
@@ -47,13 +54,18 @@ const initAudioMonitor = async (stream) => {
             if (!isPreviewing.value) return;
             analyser.getByteFrequencyData(dataArray);
             const volume = dataArray.reduce((a, b) => a + b) / dataArray.length;
-            // Normaliza para 0-100
             volumeLevel.value = Math.min(Math.round(volume / 1.5), 100);
             animationFrameId = requestAnimationFrame(updateVolume);
         };
         updateVolume();
     } catch (e) {
-        console.error("Erro no áudio monitor", e);
+        console.error("Erro no áudio monitor:", e);
+        toast.add({
+            severity: 'warn',
+            summary: 'Aviso',
+            detail: 'Monitor de áudio não disponível',
+            life: 3000
+        });
     }
 };
 
@@ -121,7 +133,21 @@ const startPreview = async () => {
         drawFrame();
 
     } catch (error) {
-        alert("Erro ao acessar câmera: " + error.message);
+        console.error("Erro ao acessar câmera:", error);
+
+        let errorMessage = "Erro ao acessar câmera";
+        if (error.name === 'NotAllowedError') {
+            errorMessage = "Permissão de câmera negada. Autorize o acesso e tente novamente.";
+        } else if (error.name === 'NotFoundError') {
+            errorMessage = "Nenhuma câmera encontrada no dispositivo.";
+        }
+
+        toast.add({
+            severity: 'error',
+            summary: 'Erro',
+            detail: errorMessage,
+            life: 5000
+        });
     }
 };
 
@@ -129,8 +155,7 @@ const startPreview = async () => {
 const startRecording = () => {
     if (!videoCanvas.value) return;
 
-    // Reinicia a trava
-    isStopping.value = false; // <--- ADICIONE ISTO
+    isStopping.value = false;
 
     const canvasStream = videoCanvas.value.captureStream(30);
     const audioTrack = mediaStream.getAudioTracks()[0];
@@ -140,9 +165,9 @@ const startRecording = () => {
         type: 'video',
         mimeType: 'video/webm;codecs=vp9,opus',
         timeSlice: 5000,
-        // MODIFICAÇÃO AQUI: Verifique se estamos parando
         ondataavailable: (blob) => {
-            if (isStopping.value) return; // Se estiver parando, ignora este evento automático
+            // Removido if (isStopping.value) return
+            // Isso impedia o último chunk de ser enviado!
             uploadChunk(blob, false);
         },
     });
@@ -150,23 +175,57 @@ const startRecording = () => {
     recorder.startRecording();
     isRecording.value = true;
     startTimer();
+
+    toast.add({
+        severity: 'info',
+        summary: 'Gravação Iniciada',
+        detail: 'A oitiva está sendo gravada',
+        life: 2000
+    });
 };
 
-// Função para Parar
+// Função para Parar com confirmação
+const confirmStopRecording = () => {
+    confirm.require({
+        message: 'Tem certeza que deseja finalizar a gravação? Esta ação não pode ser desfeita.',
+        header: 'Confirmar Finalização',
+        icon: 'pi pi-exclamation-triangle',
+        acceptLabel: 'Sim, Finalizar',
+        rejectLabel: 'Cancelar',
+        accept: () => {
+            stopRecording();
+        }
+    });
+};
+
 const stopRecording = () => {
     if (!recorder) return;
 
     // Ativa a trava imediatamente para bloquear o ondataavailable
-    isStopping.value = true; // <--- ADICIONE ISTO
+    isStopping.value = true;
     isRecording.value = false;
     stopTimer();
 
-    recorder.stopRecording(() => {
-        // Pega o blob final (que contém o restante do buffer)
-        const blob = recorder.getBlob();
+    toast.add({
+        severity: 'info',
+        summary: 'Finalizando',
+        detail: 'Processando gravação final...',
+        life: 3000
+    });
 
-        // Envia explicitamente como FINAL
-        uploadChunk(blob, true);
+    recorder.stopRecording(async () => {
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Verifica se ainda tem algum chunk não enviado
+        const lastBlob = recorder.getBlob();
+        if (lastBlob && lastBlob.size > 0) {
+            console.log('Enviando último chunk não processado:', (lastBlob.size / 1024).toFixed(2), 'KB');
+            await uploadChunk(lastBlob, false);
+        }
+
+        // Agora sinaliza o fim da gravação (sem enviar blob)
+        console.log('Sinalizando fim da gravação');
+        await uploadChunk(new Blob([]), true);
 
         // Limpeza
         if (mediaStream) {
@@ -200,12 +259,44 @@ const uploadChunk = async (blob, isFinal = false) => {
         partNumber.value++;
 
         if (isFinal) {
-            alert('Oitiva finalizada com sucesso! Você já pode fechar esta janela.');
-            window.close(); // Tenta fechar a aba
+            toast.add({
+                severity: 'success',
+                summary: 'Concluído!',
+                detail: 'Oitiva finalizada e salva com sucesso',
+                life: 5000
+            });
+
+            setTimeout(() => {
+                window.close();
+            }, 2000);
         }
     } catch (error) {
         console.error("Erro upload:", error);
-        alert("Erro no envio. Verifique a conexão.");
+
+        let errorDetail = "Erro ao enviar dados. Verifique sua conexão.";
+        if (error.response) {
+            if (error.response.status === 413) {
+                errorDetail = "Arquivo muito grande. Tente gravar em sessões menores.";
+            } else if (error.response.status >= 500) {
+                errorDetail = "Erro no servidor. Tente novamente.";
+            }
+        } else if (error.request) {
+            errorDetail = "Sem conexão com o servidor. Verifique sua internet.";
+        }
+
+        toast.add({
+            severity: 'error',
+            summary: 'Erro no Upload',
+            detail: errorDetail,
+            life: 5000
+        });
+
+        // Se for o chunk final e falhou, tenta novamente após delay
+        if (isFinal) {
+            setTimeout(() => {
+                uploadChunk(blob, true);
+            }, 3000);
+        }
     } finally {
         isUploading.value = false;
     }
@@ -238,7 +329,10 @@ const formatDate = (date) => new Date(date).toLocaleString('pt-BR');
 </script>
 
 <template>
-    <Head title="Gravação de Oitiva - VERBO" />
+    <Head title="Gravação de Oitiva" />
+
+    <Toast />
+    <ConfirmDialog />
 
     <div class="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
 
@@ -327,7 +421,7 @@ const formatDate = (date) => new Date(date).toLocaleString('pt-BR');
                                     label="Parar e Salvar"
                                     icon="pi pi-stop-circle"
                                     :disabled="!isRecording"
-                                    @click="stopRecording"
+                                    @click="confirmStopRecording"
                                     size="large"
                                     class="w-48 font-semibold bg-neutral-700 hover:bg-neutral-800 border-neutral-700"
                                 />
@@ -338,18 +432,30 @@ const formatDate = (date) => new Date(date).toLocaleString('pt-BR');
                             <div v-if="!isPreviewing" class="absolute inset-0 flex items-center justify-center text-gray-500">
                                 <div class="text-center">
                                     <i class="pi pi-video text-6xl mb-3 text-gray-600"></i>
-                                    <p class="text-gray-500">Clique em "Ativar Câmera" para iniciar</p>
+                                    <p class="text-gray-500 mb-4">Clique em "Ativar Câmera" para iniciar</p>
+                                    <div class="text-xs text-gray-400 space-y-1">
+                                        <div class="flex items-center justify-center gap-2">
+                                            <i class="pi pi-check-circle text-green-500"></i>
+                                            <span>Permita acesso à câmera e microfone</span>
+                                        </div>
+                                        <div class="flex items-center justify-center gap-2">
+                                            <i class="pi pi-check-circle text-green-500"></i>
+                                            <span>Verifique sua conexão de internet</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
                             <canvas ref="videoCanvas" class="w-full h-full object-contain"></canvas>
 
+                            <!-- Timer de Gravação -->
                             <div v-if="isRecording" class="absolute top-4 right-4 bg-red-600 text-white px-4 py-2 font-mono text-lg animate-pulse shadow-lg" style="border-radius: 6px;">
                                 <i class="pi pi-circle-fill mr-2 text-xs"></i>
                                 {{ recordingTime }}
                             </div>
                         </div>
 
+                        <!-- Monitor de Áudio -->
                         <div class="w-full max-w-4xl mt-3">
                             <div class="flex items-center justify-between mb-2">
                                 <label class="text-sm text-gray-700 font-semibold flex items-center gap-2">

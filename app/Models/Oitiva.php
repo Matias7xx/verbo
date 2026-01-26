@@ -16,14 +16,17 @@ class Oitiva extends Model
         'uuid', 'user_id', 'unidade_id', 'declarante_id', 'representante_id',
         'numero_inquerito', 'nome_delegado_responsavel', 'tipo_oitiva',
         'caminho_arquivo_video', 'hash_arquivo_video', 'assinatura_biometrica',
-        'data_inicio_gravacao', 'data_fim_gravacao', 'observacoes', 'status_download',
-        'download_zip_path',
+        'data_inicio_gravacao', 'data_fim_gravacao', 'observacoes',
+        'status_download', 'download_zip_path',
+        'transcricao',
+        'processando_transcricao',
     ];
 
     protected $casts = [
         'tipo_oitiva' => TipoOitiva::class,
         'data_inicio_gravacao' => 'datetime',
         'data_fim_gravacao' => 'datetime',
+        'processando_transcricao' => 'boolean',
     ];
 
     public function uniqueIds(): array

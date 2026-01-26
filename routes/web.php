@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 
-/* Route::get('/', function () {
+/* Route::get('/laravel', function () {
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
         'canRegister' => Route::has('register'),
@@ -28,12 +28,16 @@ Route::post('/sala-gravacao/{oitiva}/upload', [PublicOitivaController::class, 'u
     ->name('public.oitiva.upload')
     ->middleware('signed');
 
-// Rota futura para assistir (pode ser protegida ou assinada também)
+// Rota para assistir
 Route::get('/assistir/{oitiva}', [PublicOitivaController::class, 'assistir'])
     ->name('public.oitiva.assistir')
     ->middleware('signed');
 
-    // Rotas de Download
+//Rota para servir a transcrição
+Route::get('/assistir/{oitiva}/transcricao', [PublicOitivaController::class, 'transcricao'])
+    ->name('public.oitiva.transcricao');
+
+// Rotas de Download
 Route::post('/assistir/{oitiva}/iniciar-download', [PublicOitivaController::class, 'iniciarDownload'])
     ->name('public.oitiva.iniciar-download');
 
